@@ -17,3 +17,4 @@ instruction.md
 DEPLOY.md
 README.md
 deploy/
+docker-compose.yml
