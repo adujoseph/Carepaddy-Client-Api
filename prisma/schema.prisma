@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserType {
+  client
+  admin
+}
+
+enum UserRole {
+  care_admin
+  care_staff
+  guardian
+}
+
+enum AccountStatus {
+  pending
+  active
+  suspended
+  rejected
+}
+
+model HealthCheck {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+}
+
+model Carehome {
+  id              String        @id @default(uuid())
+  name            String
+  cqcNumber       String        @unique
+  cqcCheck        Boolean       @default(false)
+  cqcCheckedAt    DateTime?
+  email           String        @unique
+  phone           String?       @unique
+  addressLine     String
+  city            String
+  postcode        String
+  isEmailVerified Boolean       @default(false)
+  isPhoneVerified Boolean       @default(false)
+  status          AccountStatus @default(active)
+  users           User[]
+  residents       Resident[]
+  guardianLinks   GuardianResident[]
+  createdAt       DateTime      @default(now())
+}
+
+model User {
+  id              String               @id @default(uuid())
+  name            String
+  email           String?              @unique
+  phone           String?              @unique
+  password        String
+  userType        UserType
+  userRole        UserRole
+  status          AccountStatus        @default(active)
+  isEmailVerified Boolean              @default(false)
+  isPhoneVerified Boolean              @default(false)
+  termsAcceptedAt DateTime?
+  tenantId        String?
+  carehome        Carehome?            @relation(fields: [tenantId], references: [id])
+  guardianLinks   GuardianResident[]
+  sessions        Session[]
+  failedLogins    FailedLoginAttempt[]
+  resetTokens     PasswordResetToken[]
+  createdAt       DateTime             @default(now())
+}
+
+model Resident {
+  id             String             @id @default(uuid())
+  tenantId       String
+  carehome       Carehome           @relation(fields: [tenantId], references: [id])
+  name           String
+  residentNumber String
+  guardians      GuardianResident[]
+  invites        Invite[]
+
+  @@unique([tenantId, residentNumber])
+}
+
+model GuardianResident {
+  id         String        @id @default(uuid())
+  guardianId String
+  residentId String
+  tenantId   String
+  status     AccountStatus @default(pending)
+  guardian   User          @relation(fields: [guardianId], references: [id])
+  resident   Resident      @relation(fields: [residentId], references: [id])
+  carehome   Carehome      @relation(fields: [tenantId], references: [id])
+  createdAt  DateTime      @default(now())
+
+  @@unique([guardianId, residentId])
+}
+
+model Invite {
+  id           String    @id @default(uuid())
+  jti          String    @unique
+  tenantId     String
+  residentId   String
+  resident     Resident  @relation(fields: [residentId], references: [id])
+  guardianName String
+  email        String?
+  phone        String?
+  used         Boolean   @default(false)
+  usedAt       DateTime?
+  resendCount  Int       @default(0)
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+}
+
+model Session {
+  id               String   @id @default(uuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id])
+  refreshTokenHash String
+  userAgent        String?
+  ip               String?
+  revoked          Boolean  @default(false)
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  jti       String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  used      Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model FailedLoginAttempt {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}

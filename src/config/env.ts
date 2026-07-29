@@ -1,0 +1,71 @@
+import dotenv from 'dotenv';
+dotenv.config({ quiet: true });
+
+/** Strip common .env paste artifacts: surrounding quotes and trailing commas. */
+function cleanEnvValue(value: string): string {
+  let v = value.trim();
+  if (v.endsWith(',')) {
+    v = v.slice(0, -1).trim();
+  }
+  if (
+    (v.startsWith('"') && v.endsWith('"')) ||
+    (v.startsWith("'") && v.endsWith("'"))
+  ) {
+    v = v.slice(1, -1).trim();
+  }
+  return v;
+}
+
+function readEnv(key: string): string | undefined {
+  const value = process.env[key];
+  if (value === undefined) return undefined;
+  const cleaned = cleanEnvValue(value);
+  return cleaned.length > 0 ? cleaned : undefined;
+}
+
+function required(key: string): string {
+  const value = readEnv(key);
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${key}`);
+  }
+  return value;
+}
+
+function optional(key: string, fallback: string): string {
+  return readEnv(key) ?? fallback;
+}
+
+function parsePort(value: string | undefined, fallback: number): number {
+  const port = Number(value ?? fallback);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`Invalid PORT: ${value ?? fallback}`);
+  }
+  return port;
+}
+
+const jwtAccessSecret = required('JWT_ACCESS_SECRET');
+
+export const env = {
+  nodeEnv: readEnv('NODE_ENV') ?? 'development',
+  port: parsePort(readEnv('PORT'), 4000),
+  databaseUrl: required('DATABASE_URL'),
+  jwtAccessSecret,
+  jwtInviteSecret: optional('JWT_INVITE_SECRET', jwtAccessSecret),
+  jwtResetSecret: optional('JWT_RESET_SECRET', jwtAccessSecret),
+  jwtOtpSecret: optional('JWT_OTP_SECRET', jwtAccessSecret),
+  accessTokenTtlSeconds: 15 * 60,
+  refreshTokenTtlDays: 30,
+  appPublicUrl: optional('APP_PUBLIC_URL', 'http://localhost:3000'),
+
+  redisUrl: optional('REDIS_URL', 'redis://localhost:6379'),
+
+  awsRegion: optional('AWS_REGION', 'eu-west-2'),
+  awsAccessKeyId: readEnv('AWS_ACCESS_KEY_ID'),
+  awsSecretAccessKey: readEnv('AWS_SECRET_ACCESS_KEY'),
+  sesFromEmail: optional('SES_FROM_EMAIL', 'no-reply@carepaddy.com'),
+  snsSenderId: optional('SNS_SENDER_ID', 'CarePaddy'),
+
+  otpCodeTtlSeconds: Number(optional('OTP_CODE_TTL_SECONDS', '300')),
+  otpRequestLimit: Number(optional('OTP_REQUEST_LIMIT', '3')),
+  otpRequestWindowSeconds: Number(optional('OTP_REQUEST_WINDOW_SECONDS', '600')),
+};
