@@ -13,17 +13,21 @@ export const app = express();
 
 app.set('trust proxy', 1);
 
+// Middleware
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
 app.use(pinoHttp());
 
+// Routes
 app.use('/api/v1', healthRouter);
 app.use('/api/v1/client', clientRouter);
 
+// OpenAPI Documentation
 const openApiSpec = generateOpenApiSpec();
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openApiSpec));
 
+// Error handling
 app.use(notFoundHandler);
 app.use(errorHandler);
 
