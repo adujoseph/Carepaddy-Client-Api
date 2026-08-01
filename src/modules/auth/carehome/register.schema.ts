@@ -14,6 +14,8 @@ export const registerCarehomeSchema = z.object({
     city: z.string().trim().min(1).max(100),
   }),
   password: z.string().min(12).max(200),
+  /** From POST /verifyOTP — required backend gate before registration. */
+  verificationToken: z.string().min(1),
 });
 
 export type RegisterCarehomeInput = z.infer<typeof registerCarehomeSchema>;

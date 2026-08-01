@@ -1,4 +1,6 @@
-import { redis } from '@lib/redis';
+import { env } from '@config/env';
+import { logger } from '@lib/logger';
+import { getRedis } from '@lib/redis';
 
 export interface KeyValueStore {
   get<T>(key: string): Promise<T | null>;
@@ -12,7 +14,7 @@ type Entry = {
   expiresAt: number;
 };
 
-/** In-memory store — useful for local tests without Redis. */
+/** In-memory store — default for local development without Redis. */
 export class MemoryKeyValueStore implements KeyValueStore {
   private readonly store = new Map<string, Entry>();
 
@@ -54,20 +56,21 @@ export class MemoryKeyValueStore implements KeyValueStore {
 /** Redis-backed store — used in staging/production. */
 export class RedisKeyValueStore implements KeyValueStore {
   async get<T>(key: string): Promise<T | null> {
-    const raw = await redis.get(key);
+    const raw = await getRedis().get(key);
     if (!raw) return null;
     return JSON.parse(raw) as T;
   }
 
   async set<T>(key: string, value: T, ttlSeconds: number): Promise<void> {
-    await redis.set(key, JSON.stringify(value), 'EX', ttlSeconds);
+    await getRedis().set(key, JSON.stringify(value), 'EX', ttlSeconds);
   }
 
   async del(key: string): Promise<void> {
-    await redis.del(key);
+    await getRedis().del(key);
   }
 
   async incr(key: string, ttlSeconds = 600): Promise<number> {
+    const redis = getRedis();
     const count = await redis.incr(key);
     if (count === 1) {
       await redis.expire(key, ttlSeconds);
@@ -76,7 +79,14 @@ export class RedisKeyValueStore implements KeyValueStore {
   }
 }
 
-export const kvStore: KeyValueStore =
-  process.env.KV_STORE === 'memory'
-    ? new MemoryKeyValueStore()
-    : new RedisKeyValueStore();
+function resolveKvStore(): KeyValueStore {
+  const mode = env.kvStore;
+  if (mode === 'redis') {
+    logger.info('Using Redis key-value store');
+    return new RedisKeyValueStore();
+  }
+  logger.info('Using in-memory key-value store (set KV_STORE=redis when Redis is available)');
+  return new MemoryKeyValueStore();
+}
+
+export const kvStore: KeyValueStore = resolveKvStore();

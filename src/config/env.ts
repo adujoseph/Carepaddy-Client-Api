@@ -57,7 +57,20 @@ export const env = {
   refreshTokenTtlDays: 30,
   appPublicUrl: optional('APP_PUBLIC_URL', 'http://localhost:3000'),
 
-  redisUrl: optional('REDIS_URL', 'redis://localhost:6379'),
+  redisUrl: optional('REDIS_URL', 'redis://127.0.0.1:6379'),
+  /**
+   * OTP / rate-limit backend.
+   * - development default: memory (no Redis required)
+   * - production default: redis
+   * Override with KV_STORE=memory|redis
+   */
+  kvStore: (readEnv('KV_STORE') ??
+    ((readEnv('NODE_ENV') ?? 'development') === 'production' ? 'redis' : 'memory')) as
+    | 'memory'
+    | 'redis',
+
+  /** UK address list by postcode — getAddress.io */
+  getAddressApiKey: readEnv('GETADDRESS_API_KEY'),
 
   awsRegion: optional('AWS_REGION', 'eu-west-2'),
   awsAccessKeyId: readEnv('AWS_ACCESS_KEY_ID'),

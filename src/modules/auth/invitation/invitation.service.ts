@@ -6,14 +6,18 @@ import { generateJti, enforceRateLimit } from '@lib/rateLimiter';
 import { signInviteToken, verifyInviteToken } from '@lib/jwt';
 import { assertPasswordPolicy, hashPassword } from '@lib/password';
 import { normalizeEmail, normalizePhone } from '@lib/normalize';
+import { requireVerifiedContact } from '@lib/verification';
 import { AppError } from '@middleware/error-handler';
 import { emailSender, smsSender } from '../../../providers/notify.js';
 import { createSessionForUser } from '../session/session.service.js';
 import { logger } from '@lib/logger';
 
+/**
+ * Invite a guardian for an already-registered resident.
+ * Carehomes must create the resident first via POST /residents.
+ */
 export const createInvitationSchema = z
   .object({
-    residentName: z.string().trim().min(1).max(200),
     residentId: z.uuid(),
     guardianName: z.string().trim().min(1).max(200),
     guardianEmail: z.email().optional(),
@@ -45,6 +49,8 @@ export const completeInvitationSchema = z.object({
   userType: z.literal('client'),
   userRole: z.literal('guardian'),
   termsAccepted: z.literal(true),
+  /** From POST /verifyOTP — required backend gate before registration. */
+  verificationToken: z.string().min(1),
 });
 
 export type CreateInvitationInput = z.infer<typeof createInvitationSchema>;
@@ -247,6 +253,12 @@ export async function completeInvitation(
     throw new AppError(400, 'Phone does not match this invitation', 'PHONE_MISMATCH');
   }
 
+  const verified = await requireVerifiedContact({
+    verificationToken: input.verificationToken,
+    email,
+    phone,
+  });
+
   const existingUser = await prisma.user.findUnique({ where: { email } });
   if (!existingUser) {
     await assertPasswordPolicy(input.password);
@@ -271,6 +283,17 @@ export async function completeInvitation(
           userRole: 'guardian',
           status: 'active',
           termsAcceptedAt: new Date(),
+          isEmailVerified: verified.isEmailVerified,
+          isPhoneVerified: verified.isPhoneVerified,
+        },
+      });
+    } else {
+      guardian = await tx.user.update({
+        where: { id: guardian.id },
+        data: {
+          isEmailVerified: guardian.isEmailVerified || verified.isEmailVerified,
+          isPhoneVerified: guardian.isPhoneVerified || verified.isPhoneVerified,
+          status: guardian.status === 'pending' ? 'active' : guardian.status,
         },
       });
     }
@@ -326,6 +349,9 @@ export async function completeInvitation(
       phone: user.phone,
       userType: user.userType,
       userRole: user.userRole,
+      status: user.status,
+      isEmailVerified: user.isEmailVerified,
+      isPhoneVerified: user.isPhoneVerified,
     },
     residentLinks: links.map((link) => ({
       residentId: link.residentId,

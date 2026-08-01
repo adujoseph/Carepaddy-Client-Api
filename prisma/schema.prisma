@@ -47,6 +47,7 @@ model Carehome {
   users           User[]
   residents       Resident[]
   guardianLinks   GuardianResident[]
+  guardianRequests GuardianRegistrationRequest[]
   createdAt       DateTime      @default(now())
 }
 
@@ -65,6 +66,7 @@ model User {
   tenantId        String?
   carehome        Carehome?            @relation(fields: [tenantId], references: [id])
   guardianLinks   GuardianResident[]
+  registrationRequests GuardianRegistrationRequest[]
   sessions        Session[]
   failedLogins    FailedLoginAttempt[]
   resetTokens     PasswordResetToken[]
@@ -79,6 +81,7 @@ model Resident {
   residentNumber String
   guardians      GuardianResident[]
   invites        Invite[]
+  registrationRequests GuardianRegistrationRequest[]
 
   @@unique([tenantId, residentNumber])
 }
@@ -95,6 +98,26 @@ model GuardianResident {
   createdAt  DateTime      @default(now())
 
   @@unique([guardianId, residentId])
+}
+
+/// Self-service guardian signup awaiting carehome approval (may not yet have a resident link).
+model GuardianRegistrationRequest {
+  id                  String        @id @default(uuid())
+  guardianId          String
+  tenantId            String
+  residentNameHint    String?
+  residentNumberHint  String?
+  status              AccountStatus @default(pending)
+  residentId          String?
+  reviewedAt          DateTime?
+  reviewedById        String?
+  createdAt           DateTime      @default(now())
+
+  guardian User      @relation(fields: [guardianId], references: [id])
+  carehome Carehome  @relation(fields: [tenantId], references: [id])
+  resident Resident? @relation(fields: [residentId], references: [id])
+
+  @@index([tenantId, status])
 }
 
 model Invite {

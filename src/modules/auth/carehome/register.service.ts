@@ -1,6 +1,7 @@
 import { prisma } from '@lib/prisma';
 import { assertPasswordPolicy, hashPassword } from '@lib/password';
 import { normalizeEmail, normalizePhone } from '@lib/normalize';
+import { requireVerifiedContact } from '@lib/verification';
 import { AppError } from '@middleware/error-handler';
 import { runCqcCheckInBackground } from '../../../providers/cqc.provider.js';
 import type { RegisterCarehomeInput } from './register.schema.js';
@@ -11,6 +12,12 @@ export async function registerCarehome(input: RegisterCarehomeInput) {
   const email = normalizeEmail(input.email);
   const phone = normalizePhone(input.phone);
   const cqcNumber = input.cqcNumber.trim().toUpperCase();
+
+  const verified = await requireVerifiedContact({
+    verificationToken: input.verificationToken,
+    email,
+    phone,
+  });
 
   const existing = await prisma.carehome.findFirst({
     where: {
@@ -41,6 +48,8 @@ export async function registerCarehome(input: RegisterCarehomeInput) {
         city: input.address.city.trim(),
         postcode: input.address.postcode.trim().toUpperCase().replace(/\s+/g, ' '),
         status: 'active',
+        isEmailVerified: verified.isEmailVerified,
+        isPhoneVerified: verified.isPhoneVerified,
       },
     });
 
@@ -55,6 +64,8 @@ export async function registerCarehome(input: RegisterCarehomeInput) {
         status: 'active',
         tenantId: carehome.id,
         termsAcceptedAt: new Date(),
+        isEmailVerified: verified.isEmailVerified,
+        isPhoneVerified: verified.isPhoneVerified,
       },
     });
 
@@ -104,6 +115,8 @@ export async function registerCarehome(input: RegisterCarehomeInput) {
       userRole: result.user.userRole,
       status: result.user.status,
       tenantId: result.user.tenantId,
+      isEmailVerified: result.user.isEmailVerified,
+      isPhoneVerified: result.user.isPhoneVerified,
       createdAt: result.user.createdAt,
     },
   };

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { z } from '@docs/zod-extend';
 import { validateBody, validateQuery } from '@middleware/validate';
 import { requireAuth } from '@middleware/auth';
 import { registry } from '@docs/registry';
@@ -39,6 +40,21 @@ import {
 } from '@modules/auth/invitation/invitation.controller';
 import { selfRegisterSchema } from '@modules/auth/guardian/self-register.service';
 import { selfRegisterController } from '@modules/auth/guardian/self-register.controller';
+import {
+  approveGuardianRegistrationSchema,
+  listGuardianRegistrationsQuerySchema,
+} from '@modules/auth/guardian/registration-approval.service';
+import {
+  approveGuardianRegistrationController,
+  listGuardianRegistrationsController,
+} from '@modules/auth/guardian/registration-approval.controller';
+import {
+  createResidentSchema,
+} from '@modules/residents/resident.service';
+import {
+  createResidentController,
+  listResidentsController,
+} from '@modules/residents/resident.controller';
 import { requireRoles } from '@middleware/roles';
 
 export const clientRouter = Router();
@@ -47,13 +63,13 @@ registry.registerPath({
   method: 'post',
   path: '/client/auth/register-carehome',
   tags: ['Client Auth'],
-  summary: 'Register a carehome and its first care_admin user',
+  summary: 'Register a carehome and its first care_admin user (requires prior OTP verification)',
   request: {
     body: { content: { 'application/json': { schema: registerCarehomeSchema } } },
   },
   responses: {
     201: { description: 'Carehome created' },
-    400: { description: 'Validation error' },
+    400: { description: 'Validation / verification required' },
     409: { description: 'Duplicate email/phone/CQC number' },
   },
 });
@@ -178,13 +194,14 @@ registry.registerPath({
   method: 'get',
   path: '/client/postcode',
   tags: ['Lookups'],
-  summary: 'Lookup UK addresses by postcode',
+  summary: 'Lookup UK address list by postcode (getAddress.io)',
   request: {
     query: postcodeQuerySchema,
   },
   responses: {
-    200: { description: 'Address suggestions' },
+    200: { description: 'Array of selectable addresses' },
     502: { description: 'Upstream unavailable' },
+    503: { description: 'GETADDRESS_API_KEY not configured' },
   },
 });
 
@@ -227,9 +244,37 @@ clientRouter.post('/cqc', validateBody(cqcLookupSchema), cqcController);
 
 registry.registerPath({
   method: 'post',
+  path: '/client/residents',
+  tags: ['Residents'],
+  summary: 'Register a resident for the authenticated carehome (required before inviting a guardian)',
+  security: [{ bearerAuth: [] }],
+  request: {
+    body: { content: { 'application/json': { schema: createResidentSchema } } },
+  },
+  responses: {
+    201: { description: 'Resident created' },
+    403: { description: 'Forbidden' },
+    409: { description: 'Duplicate resident number' },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/client/residents',
+  tags: ['Residents'],
+  summary: 'List residents for the authenticated carehome',
+  security: [{ bearerAuth: [] }],
+  responses: {
+    200: { description: 'Resident list' },
+    403: { description: 'Forbidden' },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
   path: '/client/invitation',
   tags: ['Invitations'],
-  summary: 'Invite a guardian for a resident (carehome staff)',
+  summary: 'Invite a guardian for a pre-registered resident (carehome staff)',
   security: [{ bearerAuth: [] }],
   request: {
     body: { content: { 'application/json': { schema: createInvitationSchema } } },
@@ -259,13 +304,13 @@ registry.registerPath({
   method: 'post',
   path: '/client/auth/complete-invitation',
   tags: ['Invitations'],
-  summary: 'Complete guardian registration via invitation',
+  summary: 'Complete guardian registration via invitation (requires prior OTP verification)',
   request: {
     body: { content: { 'application/json': { schema: completeInvitationSchema } } },
   },
   responses: {
     201: { description: 'Guardian registered and logged in' },
-    400: { description: 'Validation / mismatch' },
+    400: { description: 'Validation / verification / mismatch' },
     409: { description: 'Invite already used' },
     410: { description: 'Expired' },
   },
@@ -275,16 +320,63 @@ registry.registerPath({
   method: 'post',
   path: '/client/auth/register',
   tags: ['Client Auth'],
-  summary: 'Guardian self-service registration (pending approval)',
+  summary:
+    'Guardian self-service registration without invite (requires OTP; pending until carehome approval)',
   request: {
     body: { content: { 'application/json': { schema: selfRegisterSchema } } },
   },
   responses: {
     201: { description: 'Registered pending approval' },
-    404: { description: 'Resident not found' },
-    409: { description: 'Duplicate link' },
+    400: { description: 'Verification required' },
+    404: { description: 'Carehome not found' },
+    409: { description: 'Duplicate account' },
   },
 });
+
+registry.registerPath({
+  method: 'get',
+  path: '/client/guardian-registrations',
+  tags: ['Guardian Approvals'],
+  summary: 'List guardian self-registrations awaiting carehome approval',
+  security: [{ bearerAuth: [] }],
+  request: { query: listGuardianRegistrationsQuerySchema },
+  responses: {
+    200: { description: 'Pending (or filtered) registration requests' },
+    403: { description: 'Forbidden' },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/client/guardian-registrations/{id}/approve',
+  tags: ['Guardian Approvals'],
+  summary: 'Approve a guardian registration and attach them to a resident',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({ id: z.uuid() }),
+    body: { content: { 'application/json': { schema: approveGuardianRegistrationSchema } } },
+  },
+  responses: {
+    200: { description: 'Guardian approved and linked' },
+    403: { description: 'Forbidden' },
+    404: { description: 'Not found' },
+    409: { description: 'Already reviewed or already linked' },
+  },
+});
+
+clientRouter.post(
+  '/residents',
+  requireAuth,
+  requireRoles('care_admin', 'care_staff'),
+  validateBody(createResidentSchema),
+  createResidentController,
+);
+clientRouter.get(
+  '/residents',
+  requireAuth,
+  requireRoles('care_admin', 'care_staff'),
+  listResidentsController,
+);
 
 clientRouter.post(
   '/invitation',
@@ -304,3 +396,18 @@ clientRouter.post(
   completeInvitationController,
 );
 clientRouter.post('/auth/register', validateBody(selfRegisterSchema), selfRegisterController);
+
+clientRouter.get(
+  '/guardian-registrations',
+  requireAuth,
+  requireRoles('care_admin', 'care_staff'),
+  validateQuery(listGuardianRegistrationsQuerySchema),
+  listGuardianRegistrationsController,
+);
+clientRouter.post(
+  '/guardian-registrations/:id/approve',
+  requireAuth,
+  requireRoles('care_admin', 'care_staff'),
+  validateBody(approveGuardianRegistrationSchema),
+  approveGuardianRegistrationController,
+);

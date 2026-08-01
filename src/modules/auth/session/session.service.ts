@@ -91,7 +91,12 @@ export async function login(
     throw new AppError(401, GENERIC_LOGIN_ERROR, 'INVALID_CREDENTIALS');
   }
 
-  if (user.status !== 'active') {
+  // Guardians may log in while pending carehome approval; other roles must be active.
+  const loginAllowed =
+    user.status === 'active' ||
+    (user.userRole === 'guardian' && user.status === 'pending');
+
+  if (!loginAllowed) {
     throw new AppError(401, GENERIC_LOGIN_ERROR, 'INVALID_CREDENTIALS');
   }
 
@@ -112,6 +117,7 @@ export async function login(
     phone: user.phone,
     userType: user.userType,
     userRole: user.userRole,
+    status: user.status,
   };
 
   if (user.userRole === 'guardian') {
@@ -126,6 +132,7 @@ export async function login(
       })),
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
+      pendingApproval: user.status === 'pending',
     };
   }
 
@@ -163,7 +170,11 @@ export async function refresh(refreshToken: string) {
     throw new AppError(401, 'Invalid or expired refresh token', 'UNAUTHORIZED');
   }
 
-  if (session.user.status !== 'active') {
+  const refreshAllowed =
+    session.user.status === 'active' ||
+    (session.user.userRole === 'guardian' && session.user.status === 'pending');
+
+  if (!refreshAllowed) {
     await prisma.session.update({
       where: { id: session.id },
       data: { revoked: true },
