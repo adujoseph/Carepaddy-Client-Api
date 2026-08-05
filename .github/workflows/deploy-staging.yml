@@ -19,4 +19,4 @@ jobs:
             npx prisma generate
             npx prisma migrate deploy
             pnpm run build
-            pm2 startOrReload all ecosystem.config.cjs --update-env
+            pm2 startOrReload ecosystem.config.cjs --update-env
