@@ -159,3 +159,49 @@ export async function verifyInviteToken(token: string): Promise<InviteTokenPaylo
     phone: typeof payload.phone === 'string' ? payload.phone : null,
   };
 }
+
+export type StaffInviteTokenPayload = {
+  purpose: 'staff_invite';
+  jti: string;
+  userId: string;
+  tenantId: string;
+  email: string;
+};
+
+export async function signStaffInviteToken(
+  payload: Omit<StaffInviteTokenPayload, 'purpose'>,
+): Promise<string> {
+  return new jose.SignJWT({
+    purpose: 'staff_invite',
+    jti: payload.jti,
+    userId: payload.userId,
+    tenantId: payload.tenantId,
+    email: payload.email,
+  })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setSubject(payload.userId)
+    .setJti(payload.jti)
+    .setIssuedAt()
+    .setExpirationTime('72h')
+    .sign(secretKey(env.jwtInviteSecret));
+}
+
+export async function verifyStaffInviteToken(token: string): Promise<StaffInviteTokenPayload> {
+  const { payload } = await jose.jwtVerify(token, secretKey(env.jwtInviteSecret));
+  if (
+    payload.purpose !== 'staff_invite' ||
+    typeof payload.jti !== 'string' ||
+    typeof payload.userId !== 'string' ||
+    typeof payload.tenantId !== 'string' ||
+    typeof payload.email !== 'string'
+  ) {
+    throw new Error('Invalid staff invite token');
+  }
+  return {
+    purpose: 'staff_invite',
+    jti: payload.jti,
+    userId: payload.userId,
+    tenantId: payload.tenantId,
+    email: payload.email,
+  };
+}

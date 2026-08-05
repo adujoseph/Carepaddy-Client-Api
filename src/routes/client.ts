@@ -55,9 +55,22 @@ import {
   createResidentController,
   listResidentsController,
 } from '@modules/residents/resident.controller';
+import { profileRouter } from '@modules/user-profile/profile.routes';
+import { manageAdminRouter } from '@modules/manage-admin/admin.routes';
+import { guardianResidentsRouter } from '@modules/guardian/guardian-residents.routes';
+import { faqRouter } from '@modules/faq/faq.routes';
 import { requireRoles } from '@middleware/roles';
 
 export const clientRouter = Router();
+
+// User profile (get / update / image / password / disable)
+clientRouter.use(profileRouter);
+// Manage Admin (invite / list / suspend / delete)
+clientRouter.use(manageAdminRouter);
+// Guardian residents
+clientRouter.use(guardianResidentsRouter);
+// FAQ (public read, care_admin write)
+clientRouter.use(faqRouter);
 
 registry.registerPath({
   method: 'post',

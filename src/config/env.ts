@@ -44,10 +44,11 @@ function parsePort(value: string | undefined, fallback: number): number {
 }
 
 const jwtAccessSecret = required('JWT_ACCESS_SECRET');
+const port = parsePort(readEnv('PORT'), 4000);
 
 export const env = {
   nodeEnv: readEnv('NODE_ENV') ?? 'development',
-  port: parsePort(readEnv('PORT'), 4000),
+  port,
   databaseUrl: required('DATABASE_URL'),
   jwtAccessSecret,
   jwtInviteSecret: optional('JWT_INVITE_SECRET', jwtAccessSecret),
@@ -77,6 +78,9 @@ export const env = {
   awsSecretAccessKey: readEnv('AWS_SECRET_ACCESS_KEY'),
   sesFromEmail: optional('SES_FROM_EMAIL', 'no-reply@carepaddy.com'),
   snsSenderId: optional('SNS_SENDER_ID', 'CarePaddy'),
+
+  /** Public base URL for locally stored profile images (e.g. https://api.example.com). */
+  apiPublicUrl: optional('API_PUBLIC_URL', `http://localhost:${port}`),
 
   otpCodeTtlSeconds: Number(optional('OTP_CODE_TTL_SECONDS', '300')),
   otpRequestLimit: Number(optional('OTP_REQUEST_LIMIT', '3')),

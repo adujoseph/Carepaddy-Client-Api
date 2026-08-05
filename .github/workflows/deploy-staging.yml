@@ -11,6 +11,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: true
           script: |
             cd /home/ubuntu/app
             git pull origin staging
@@ -18,4 +19,4 @@ jobs:
             npx prisma generate
             npx prisma migrate deploy
             pnpm run build
-            pm2 restart all
+            pm2 startOrReload all ecosystem.config.cjs --update-env

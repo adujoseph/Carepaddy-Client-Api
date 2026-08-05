@@ -57,6 +57,10 @@ model User {
   email           String?              @unique
   phone           String?              @unique
   password        String
+  profileImageUrl String?
+  addressLine     String?
+  city            String?
+  postcode        String?
   userType        UserType
   userRole        UserRole
   status          AccountStatus        @default(active)
@@ -70,6 +74,7 @@ model User {
   sessions        Session[]
   failedLogins    FailedLoginAttempt[]
   resetTokens     PasswordResetToken[]
+  staffInvites    StaffInvite[]
   createdAt       DateTime             @default(now())
 }
 
@@ -137,6 +142,23 @@ model Invite {
   createdAt    DateTime  @default(now())
 }
 
+/// Carehome staff / admin invitation (Manage Admin).
+model StaffInvite {
+  id          String    @id @default(uuid())
+  jti         String    @unique
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenantId    String
+  email       String
+  invitedById String
+  used        Boolean   @default(false)
+  usedAt      DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+
+  @@index([tenantId, used])
+}
+
 model Session {
   id               String   @id @default(uuid())
   userId           String
@@ -164,4 +186,14 @@ model FailedLoginAttempt {
   userId    String
   user      User     @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
+}
+
+model Faq {
+  id        String   @id @default(uuid())
+  question  String
+  answer    String
+  sortOrder Int      @default(0)
+  published Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

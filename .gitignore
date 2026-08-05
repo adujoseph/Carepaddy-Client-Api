@@ -5,6 +5,7 @@ dist/
 *.log
 coverage/
 .DS_Store
+uploads/
 
 /src/generated/prisma
 
