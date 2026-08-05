@@ -41,12 +41,12 @@ import {
 import { selfRegisterSchema } from '@modules/auth/guardian/self-register.service';
 import { selfRegisterController } from '@modules/auth/guardian/self-register.controller';
 import {
-  approveGuardianRegistrationSchema,
   listGuardianRegistrationsQuerySchema,
+  reviewGuardianRegistrationSchema,
 } from '@modules/auth/guardian/registration-approval.service';
 import {
-  approveGuardianRegistrationController,
   listGuardianRegistrationsController,
+  reviewGuardianRegistrationController,
 } from '@modules/auth/guardian/registration-approval.controller';
 import {
   createResidentSchema,
@@ -348,16 +348,17 @@ registry.registerPath({
 
 registry.registerPath({
   method: 'post',
-  path: '/client/guardian-registrations/{id}/approve',
+  path: '/client/guardian-registrations/{id}',
   tags: ['Guardian Approvals'],
-  summary: 'Approve a guardian registration and attach them to a resident',
+  summary: 'Approve or reject a guardian registration',
   security: [{ bearerAuth: [] }],
   request: {
     params: z.object({ id: z.uuid() }),
-    body: { content: { 'application/json': { schema: approveGuardianRegistrationSchema } } },
+    body: { content: { 'application/json': { schema: reviewGuardianRegistrationSchema } } },
   },
   responses: {
-    200: { description: 'Guardian approved and linked' },
+    200: { description: 'Registration reviewed (approved or rejected)' },
+    400: { description: 'Missing reason on reject, or missing residentId on approve' },
     403: { description: 'Forbidden' },
     404: { description: 'Not found' },
     409: { description: 'Already reviewed or already linked' },
@@ -405,9 +406,9 @@ clientRouter.get(
   listGuardianRegistrationsController,
 );
 clientRouter.post(
-  '/guardian-registrations/:id/approve',
+  '/guardian-registrations/:id',
   requireAuth,
   requireRoles('care_admin', 'care_staff'),
-  validateBody(approveGuardianRegistrationSchema),
-  approveGuardianRegistrationController,
+  validateBody(reviewGuardianRegistrationSchema),
+  reviewGuardianRegistrationController,
 );

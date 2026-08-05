@@ -109,6 +109,7 @@ model GuardianRegistrationRequest {
   residentNumberHint  String?
   status              AccountStatus @default(pending)
   residentId          String?
+  rejectionReason     String?
   reviewedAt          DateTime?
   reviewedById        String?
   createdAt           DateTime      @default(now())
