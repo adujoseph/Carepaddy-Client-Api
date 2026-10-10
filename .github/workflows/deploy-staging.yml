@@ -17,6 +17,6 @@ jobs:
             git pull origin staging
             pnpm install --frozen-lockfile
             npx prisma generate
-            npx prisma migrate deploy
+            bash scripts/prisma-migrate-deploy.sh
             pnpm run build
             pm2 startOrReload ecosystem.config.cjs --update-env
