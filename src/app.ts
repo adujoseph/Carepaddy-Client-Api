@@ -6,6 +6,7 @@ import pinoHttp from 'pino-http';
 import swaggerUi from 'swagger-ui-express';
 import { healthRouter } from '@modules/health/health.routes';
 import { clientRouter } from '@routes/client';
+import { adminRouter } from '@routes/admin';
 import { generateOpenApiSpec } from '@docs/generate-spec';
 import { errorHandler } from '@middleware/error-handler';
 import { notFoundHandler } from '@middleware/not-found';
@@ -24,6 +25,7 @@ app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
 // Routes
 app.use('/api/v1', healthRouter);
 app.use('/api/v1/client', clientRouter);
+app.use('/api/v1/admin', adminRouter);
 
 // OpenAPI Documentation
 const openApiSpec = generateOpenApiSpec();

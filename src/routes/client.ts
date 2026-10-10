@@ -59,6 +59,7 @@ import { profileRouter } from '@modules/user-profile/profile.routes';
 import { manageAdminRouter } from '@modules/manage-admin/admin.routes';
 import { guardianResidentsRouter } from '@modules/guardian/guardian-residents.routes';
 import { faqRouter } from '@modules/faq/faq.routes';
+import { clientStoreRouter } from '@modules/store/client/store.routes';
 import { requireRoles } from '@middleware/roles';
 
 export const clientRouter = Router();
@@ -71,6 +72,8 @@ clientRouter.use(manageAdminRouter);
 clientRouter.use(guardianResidentsRouter);
 // FAQ (public read, care_admin write)
 clientRouter.use(faqRouter);
+// Store (care home orders + guardian approval)
+clientRouter.use(clientStoreRouter);
 
 registry.registerPath({
   method: 'post',

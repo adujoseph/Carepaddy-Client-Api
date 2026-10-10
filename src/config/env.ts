@@ -54,8 +54,15 @@ export const env = {
   jwtInviteSecret: optional('JWT_INVITE_SECRET', jwtAccessSecret),
   jwtResetSecret: optional('JWT_RESET_SECRET', jwtAccessSecret),
   jwtOtpSecret: optional('JWT_OTP_SECRET', jwtAccessSecret),
+  /** Admin back-office access token lifetime (spec: 8h absolute session cap). */
+  adminAccessTokenTtlSeconds: Number(optional('ADMIN_ACCESS_TOKEN_TTL_SECONDS', String(8 * 60 * 60))),
+  /** Client app access token (short-lived). */
   accessTokenTtlSeconds: 15 * 60,
   refreshTokenTtlDays: 30,
+  /** Admin idle timeout — session invalid after this many seconds without activity. */
+  adminSessionIdleSeconds: Number(optional('ADMIN_SESSION_IDLE_SECONDS', String(30 * 60))),
+  /** Cloudflare Turnstile secret; when set, admin login CAPTCHA tokens are verified. */
+  turnstileSecretKey: readEnv('TURNSTILE_SECRET_KEY'),
   appPublicUrl: optional('APP_PUBLIC_URL', 'http://localhost:3000'),
 
   redisUrl: optional('REDIS_URL', 'redis://127.0.0.1:6379'),

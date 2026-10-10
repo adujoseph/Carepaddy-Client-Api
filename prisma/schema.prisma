@@ -48,6 +48,7 @@ model Carehome {
   residents       Resident[]
   guardianLinks   GuardianResident[]
   guardianRequests GuardianRegistrationRequest[]
+  storeOrders     StoreOrder[]
   createdAt       DateTime      @default(now())
 }
 
@@ -75,6 +76,7 @@ model User {
   failedLogins    FailedLoginAttempt[]
   resetTokens     PasswordResetToken[]
   staffInvites    StaffInvite[]
+  storeOrdersCreated StoreOrder[]      @relation("StoreOrderCreatedBy")
   createdAt       DateTime             @default(now())
 }
 
@@ -87,6 +89,7 @@ model Resident {
   guardians      GuardianResident[]
   invites        Invite[]
   registrationRequests GuardianRegistrationRequest[]
+  storeOrders    StoreOrder[]
 
   @@unique([tenantId, residentNumber])
 }
@@ -196,4 +199,222 @@ model Faq {
   published Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// --- Platform admin back office (RBAC) ---
+
+enum AdminUserStatus {
+  INVITED
+  ACTIVE
+  DEACTIVATED
+}
+
+model AdminRole {
+  id          String                @id @default(uuid())
+  name        String                @unique
+  nameLower   String                @unique
+  description String?
+  isSystem    Boolean               @default(false)
+  permissions AdminRolePermission[]
+  admins      AdminUser[]
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+}
+
+model AdminRolePermission {
+  id            String    @id @default(uuid())
+  roleId        String
+  role          AdminRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionKey String
+
+  @@unique([roleId, permissionKey])
+  @@index([permissionKey])
+}
+
+model AdminUser {
+  id                         String                      @id @default(uuid())
+  email                      String                      @unique
+  emailLower                 String                      @unique
+  name                       String
+  password                   String
+  status                     AdminUserStatus             @default(INVITED)
+  mustChangePassword         Boolean                     @default(false)
+  mfaTotpSecretEnc           String?
+  mfaEnrolledAt              DateTime?
+  mfaRecoveryRegenRequired   Boolean                     @default(false)
+  roleId                     String
+  role                       AdminRole                   @relation(fields: [roleId], references: [id])
+  sessions                   AdminSession[]
+  inviteTokens               AdminInviteToken[]
+  resetTokens                AdminPasswordResetToken[]
+  failedLogins               AdminFailedLoginAttempt[]
+  mfaRecoveryCodes           AdminMfaRecoveryCode[]
+  auditLogs                  AdminAuditLog[]             @relation("AdminAuditActor")
+  storeOrderStatusChanges    StoreOrderStatusHistory[]   @relation("StoreOrderStatusAdmin")
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+}
+
+model AdminSession {
+  id               String    @id @default(uuid())
+  adminUserId      String
+  adminUser        AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  refreshTokenHash String
+  userAgent        String?
+  ip               String?
+  revoked          Boolean   @default(false)
+  expiresAt        DateTime
+  lastActivityAt   DateTime  @default(now())
+  createdAt        DateTime  @default(now())
+}
+
+model AdminMfaRecoveryCode {
+  id          String    @id @default(uuid())
+  adminUserId String
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  codeHash    String
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([adminUserId])
+}
+
+model AdminInviteToken {
+  id          String    @id @default(uuid())
+  jti         String    @unique
+  adminUserId String
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  used        Boolean   @default(false)
+  usedAt      DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+}
+
+model AdminPasswordResetToken {
+  id          String    @id @default(uuid())
+  jti         String    @unique
+  adminUserId String
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  used        Boolean   @default(false)
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+}
+
+model AdminFailedLoginAttempt {
+  id          String     @id @default(uuid())
+  adminUserId String?
+  adminUser   AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  ip          String?
+  createdAt   DateTime   @default(now())
+
+  @@index([adminUserId, createdAt])
+  @@index([ip, createdAt])
+}
+
+model AdminAuditLog {
+  id         String     @id @default(uuid())
+  actorId    String?
+  actor      AdminUser? @relation("AdminAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  action     String
+  targetType String
+  targetId   String?
+  beforeState Json?
+  afterState  Json?
+  createdAt  DateTime   @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+  @@index([createdAt])
+}
+
+// --- Admin store (catalog + order fulfillment visibility) ---
+
+enum StoreOrderStatus {
+  NEW
+  DECLINED
+  PENDING_DELIVERY
+  IN_PROGRESS
+  DELIVERED
+}
+
+model StoreProduct {
+  id            String               @id @default(uuid())
+  name          String
+  description   String
+  price         Decimal              @db.Decimal(10, 2)
+  stockQuantity Int
+  imageUrl      String?
+  archivedAt    DateTime?
+  lineItems     StoreOrderLineItem[]
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@index([archivedAt])
+  @@index([name])
+}
+
+model StoreOrder {
+  id                  String                    @id @default(uuid())
+  referenceId         String                    @unique
+  carehomeId          String
+  carehome            Carehome                  @relation(fields: [carehomeId], references: [id])
+  residentId          String
+  resident            Resident                  @relation(fields: [residentId], references: [id])
+  createdByUserId     String?
+  createdBy           User?                     @relation("StoreOrderCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  status              StoreOrderStatus          @default(NEW)
+  deliveryAddressLine String
+  deliveryCity        String
+  deliveryPostcode    String
+  itemsSubtotal       Decimal                   @db.Decimal(12, 2)
+  deliveryFee         Decimal                   @db.Decimal(10, 2)
+  vatRate             Decimal                   @db.Decimal(6, 4)
+  vatAmount           Decimal                   @db.Decimal(12, 2)
+  total               Decimal                   @db.Decimal(12, 2)
+  requestedAt         DateTime                  @default(now())
+  lineItems           StoreOrderLineItem[]
+  statusHistory       StoreOrderStatusHistory[]
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+
+  @@index([carehomeId, status])
+  @@index([status, requestedAt])
+  @@index([referenceId])
+}
+
+model StoreOrderLineItem {
+  id              String       @id @default(uuid())
+  orderId         String
+  order           StoreOrder   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId       String
+  product         StoreProduct @relation(fields: [productId], references: [id])
+  productName     String
+  productImageUrl String?
+  unitPrice       Decimal      @db.Decimal(10, 2)
+  quantity        Int
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+enum StoreOrderStatusActorKind {
+  ADMIN
+  CLIENT
+  SYSTEM
+}
+
+model StoreOrderStatusHistory {
+  id           String                    @id @default(uuid())
+  orderId      String
+  order        StoreOrder                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fromStatus   StoreOrderStatus?
+  toStatus     StoreOrderStatus
+  actorKind    StoreOrderStatusActorKind
+  adminUserId  String?
+  adminUser    AdminUser?                @relation("StoreOrderStatusAdmin", fields: [adminUserId], references: [id], onDelete: SetNull)
+  clientUserId String?
+  note         String?
+  createdAt    DateTime                  @default(now())
+
+  @@index([orderId, createdAt])
 }
