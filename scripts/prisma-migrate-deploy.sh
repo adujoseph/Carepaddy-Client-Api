@@ -21,7 +21,15 @@ baseline_pre_admin_migrations() {
   for dir in "${ROOT}"/prisma/migrations/*/; do
     name="$(basename "${dir}")"
     log "Mark applied: ${name}"
-    npx prisma migrate resolve --applied "${name}"
+    local out
+    if ! out="$(npx prisma migrate resolve --applied "${name}" 2>&1)"; then
+      if grep -q 'P3008' <<<"${out}"; then
+        log "Already recorded as applied: ${name}"
+      else
+        echo "${out}" >&2
+        return 1
+      fi
+    fi
     if [[ "${name}" == "${BASELINE_UNTIL}" ]]; then
       break
     fi
@@ -44,7 +52,8 @@ fi
 cat "${err_file}" >&2
 
 if grep -q 'relation "HealthCheck" already exists' "${err_file}" \
-  || grep -q 'P3018' "${err_file}"; then
+  || grep -q 'P3018' "${err_file}" \
+  || grep -q 'P3009' "${err_file}"; then
   log "Existing database detected without init migration recorded — baselining"
   baseline_pre_admin_migrations
   run_migrate_deploy
