@@ -1,6 +1,7 @@
 import { z } from '@docs/zod-extend';
 import { prisma } from '@lib/prisma';
 import { AppError } from '@middleware/error-handler';
+import { touchCarehomeActivity } from '@lib/carehome-status';
 
 export const createResidentSchema = z.object({
   name: z.string().trim().min(1).max(200),
@@ -39,6 +40,8 @@ export async function createResident(
       residentNumber,
     },
   });
+
+  void touchCarehomeActivity(auth.tenantId);
 
   return {
     id: resident.id,

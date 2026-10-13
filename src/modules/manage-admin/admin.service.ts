@@ -10,6 +10,8 @@ import { AppError } from '@middleware/error-handler';
 import { logger } from '@lib/logger';
 import { emailSender } from '../../providers/notify.js';
 import { createSessionForUser } from '../auth/session/session.service.js';
+import { writeAdminAuditLog } from '../admin/audit.service.js';
+import { scheduleCarehomeCqcCheck } from '../admin/carehomes/carehome.notifications.js';
 import type {
   AcceptAdminInviteInput,
   InviteAdminInput,
@@ -262,6 +264,7 @@ export async function acceptAdminInvite(
   }
 
   const passwordHash = await hashPassword(input.password);
+  let activatedCarehomeId: string | null = null;
 
   const user = await prisma.$transaction(async (tx) => {
     const updated = await tx.user.update({
@@ -278,8 +281,41 @@ export async function acceptAdminInvite(
       data: { used: true, usedAt: new Date() },
     });
 
+    // First care admin of a platform-admin-invited home: accepting activates the home itself.
+    if (updated.userRole === 'care_admin' && updated.tenantId) {
+      const now = new Date();
+      const activated = await tx.carehome.updateMany({
+        where: { id: updated.tenantId, status: 'pending' },
+        data: {
+          status: 'active',
+          activatedAt: now,
+          lastActivityAt: now,
+          isEmailVerified: true,
+          inviteSendFailedAt: null,
+        },
+      });
+      if (activated.count > 0) {
+        await tx.user.update({ where: { id: updated.id }, data: { isEmailVerified: true } });
+        await writeAdminAuditLog(
+          {
+            actorId: null,
+            action: 'carehome.invite.accepted',
+            targetType: 'Carehome',
+            targetId: updated.tenantId,
+            afterState: { status: 'active', careAdminUserId: updated.id },
+          },
+          tx,
+        );
+        activatedCarehomeId = updated.tenantId;
+      }
+    }
+
     return updated;
   });
+
+  if (activatedCarehomeId) {
+    scheduleCarehomeCqcCheck(activatedCarehomeId);
+  }
 
   const tokens = await createSessionForUser({
     userId: user.id,

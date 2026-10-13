@@ -8,6 +8,7 @@ import { adminUsersRouter } from './users/user.routes.js';
 import { adminAuditRouter } from './audit/audit.routes.js';
 import { adminStoreProductsRouter } from './store/products/product.routes.js';
 import { adminStoreOrdersRouter } from './store/orders/order.routes.js';
+import { adminCarehomesRouter } from './carehomes/carehome.routes.js';
 import {
   acceptAdminInviteSchema,
   adminChangePasswordSchema,
@@ -18,6 +19,13 @@ import {
 import { createRoleSchema, listRolesQuerySchema } from './roles/role.schema.js';
 import { createAdminUserSchema, listAdminUsersQuerySchema, reassignRoleSchema } from './users/user.schema.js';
 import { listAuditLogsQuerySchema } from './audit/audit.schema.js';
+import {
+  bulkUploadSchema,
+  createProductSchema,
+  listProductsQuerySchema,
+  updateProductSchema,
+} from './store/products/product.schema.js';
+import { listStoreOrdersQuerySchema } from './store/orders/order.schema.js';
 
 export const adminModuleRouter = Router();
 
@@ -166,6 +174,133 @@ registry.registerPath({
   responses: { 200: { description: 'Audit log list' } },
 });
 
+const idParam = z.object({ id: z.string() });
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/store/products/template',
+  tags: ['Admin Store Products'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Download bulk upload CSV template (product:edit)',
+  responses: { 200: { description: 'CSV template', content: { 'text/csv': { schema: z.string() } } } },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/store/products',
+  tags: ['Admin Store Products'],
+  security: [{ bearerAuth: [] }],
+  summary: 'List products (product:view)',
+  request: { query: listProductsQuerySchema },
+  responses: { 200: { description: 'Paginated product list' } },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/store/products/{id}',
+  tags: ['Admin Store Products'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Get product (product:view)',
+  request: { params: idParam },
+  responses: { 200: { description: 'Product' }, 404: { description: 'Not found' } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/store/products',
+  tags: ['Admin Store Products'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Create product (product:edit)',
+  request: { body: { content: { 'application/json': { schema: createProductSchema } } } },
+  responses: { 201: { description: 'Product created' } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/store/products/bulk',
+  tags: ['Admin Store Products'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Bulk create products from base64 CSV (product:edit)',
+  request: { body: { content: { 'application/json': { schema: bulkUploadSchema } } } },
+  responses: { 200: { description: 'Bulk import result' } },
+});
+
+registry.registerPath({
+  method: 'patch',
+  path: '/admin/store/products/{id}',
+  tags: ['Admin Store Products'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Update product (product:edit)',
+  request: {
+    params: idParam,
+    body: { content: { 'application/json': { schema: updateProductSchema } } },
+  },
+  responses: { 200: { description: 'Product updated' } },
+});
+
+registry.registerPath({
+  method: 'delete',
+  path: '/admin/store/products/{id}',
+  tags: ['Admin Store Products'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Delete product (product:delete)',
+  request: { params: idParam },
+  responses: { 200: { description: 'Product deleted' } },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/store/orders/stats',
+  tags: ['Admin Store Orders'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Order Request counters (store-order:view)',
+  description: 'totalOrders, awaitingFamilyReview (Pending Review), rejected, delivered, plus onTheWay and pendingDelivery.',
+  responses: { 200: { description: 'Order stats' } },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/store/orders',
+  tags: ['Admin Store Orders'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Order Request list (store-order:view)',
+  description:
+    'Columns: orderId, carehome, familyContact (guardian phone, null when none), itemCount, date, statusLabel. Tabs: all, pending_review, on_the_way, delivered, rejected. Search matches order ID (with or without #) or care home name. from/to filter the request date.',
+  request: { query: listStoreOrdersQuerySchema },
+  responses: { 200: { description: 'Paginated order list' } },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/store/orders/{id}',
+  tags: ['Admin Store Orders'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Order summary (store-order:view)',
+  description: 'Family contact, status, request date, order ID, item count, items price, delivery fee, VAT percent, total, and line items.',
+  request: { params: idParam },
+  responses: { 200: { description: 'Order' }, 404: { description: 'Not found' } },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/admin/store/orders/{id}/status-history',
+  tags: ['Admin Store Orders'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Order status history (store-order:view)',
+  request: { params: idParam },
+  responses: { 200: { description: 'Status history' } },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/admin/store/orders/{id}/send-for-delivery',
+  tags: ['Admin Store Orders'],
+  security: [{ bearerAuth: [] }],
+  summary: 'Send order for delivery (store-order:fulfill)',
+  request: { params: idParam },
+  responses: { 200: { description: 'Order sent for delivery' } },
+});
+
 adminModuleRouter.get('/health', (_req, res) => {
   res.status(200).json({
     status: 'ok',
@@ -184,3 +319,4 @@ adminProtectedRouter.use(adminUsersRouter);
 adminProtectedRouter.use(adminAuditRouter);
 adminProtectedRouter.use(adminStoreProductsRouter);
 adminProtectedRouter.use(adminStoreOrdersRouter);
+adminProtectedRouter.use(adminCarehomesRouter);

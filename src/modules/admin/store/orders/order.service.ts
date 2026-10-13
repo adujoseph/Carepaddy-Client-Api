@@ -4,17 +4,37 @@ import { writeAdminAuditLog } from '../../audit.service.js';
 import type { ListStoreOrdersQuery } from './order.schema.js';
 import { Prisma, StoreOrderStatus } from '../../../../generated/prisma/client.js';
 
+const STATUS_LABEL: Record<StoreOrderStatus, string> = {
+  NEW: 'Pending Review',
+  DECLINED: 'Rejected',
+  PENDING_DELIVERY: 'Pending Delivery',
+  IN_PROGRESS: 'On the Way',
+  DELIVERED: 'Delivered',
+};
+
 const STATUS_FILTER_MAP: Record<
   Exclude<ListStoreOrdersQuery['status'], undefined>,
   StoreOrderStatus | null
 > = {
   all: null,
-  new: StoreOrderStatus.NEW,
-  declined: StoreOrderStatus.DECLINED,
+  pending_review: StoreOrderStatus.NEW,
+  rejected: StoreOrderStatus.DECLINED,
   pending_delivery: StoreOrderStatus.PENDING_DELIVERY,
-  in_progress: StoreOrderStatus.IN_PROGRESS,
+  on_the_way: StoreOrderStatus.IN_PROGRESS,
   delivered: StoreOrderStatus.DELIVERED,
 };
+
+function statusFields(status: StoreOrderStatus) {
+  return { status, statusLabel: STATUS_LABEL[status] };
+}
+
+/** First active guardian with a phone; family contact is blank when nobody has one. */
+function familyContactPhone(
+  guardians: { status: string; guardian: { phone: string | null } }[] | undefined,
+): string | null {
+  const active = guardians?.filter((link) => link.status === 'active') ?? [];
+  return active.find((link) => link.guardian.phone)?.guardian.phone ?? null;
+}
 
 function serializeLineItem(item: {
   id: string;
@@ -53,14 +73,30 @@ function serializeOrderSummary(order: {
   };
 }
 
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, '\\$&');
+}
+
 function buildSearchWhere(search: string | undefined): Prisma.StoreOrderWhereInput {
-  if (!search?.trim()) return {};
-  const q = search.trim();
+  const raw = search?.trim().replace(/^#/, '');
+  if (!raw) return {};
+  const q = escapeLike(raw);
   return {
     OR: [
       { referenceId: { contains: q, mode: 'insensitive' } },
       { carehome: { name: { contains: q, mode: 'insensitive' } } },
     ],
+  };
+}
+
+/** Inclusive UTC day bounds for the date filter. */
+function dateRangeWhere(from: string | undefined, to: string | undefined): Prisma.StoreOrderWhereInput {
+  if (!from && !to) return {};
+  return {
+    requestedAt: {
+      ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}),
+      ...(to ? { lt: new Date(Date.parse(`${to}T00:00:00.000Z`) + 24 * 60 * 60 * 1000) } : {}),
+    },
   };
 }
 
@@ -87,43 +123,68 @@ export async function getStoreOrderStats() {
   }
 
   return {
-    total,
-    new: counts.NEW,
-    declined: counts.DECLINED,
-    pendingDelivery: counts.PENDING_DELIVERY,
-    inProgress: counts.IN_PROGRESS,
+    totalOrders: total,
+    awaitingFamilyReview: counts.NEW,
+    rejected: counts.DECLINED,
     delivered: counts.DELIVERED,
+    onTheWay: counts.IN_PROGRESS,
+    pendingDelivery: counts.PENDING_DELIVERY,
   };
 }
 
-export async function listStoreOrders(query: ListStoreOrdersQuery) {
-  const skip = (query.page - 1) * query.limit;
-  const statusFilter = STATUS_FILTER_MAP[query.status];
+const residentWithFamily = {
+  select: {
+    id: true,
+    name: true,
+    residentNumber: true,
+    guardians: {
+      where: { status: 'active' as const },
+      orderBy: { createdAt: 'asc' as const },
+      select: { status: true, guardian: { select: { phone: true, name: true } } },
+    },
+  },
+};
 
+export async function listStoreOrders(query: ListStoreOrdersQuery) {
+  const statusFilter = STATUS_FILTER_MAP[query.status];
   const where: Prisma.StoreOrderWhereInput = {
-    ...buildSearchWhere(query.search),
-    ...(statusFilter ? { status: statusFilter } : {}),
+    AND: [
+      buildSearchWhere(query.search),
+      dateRangeWhere(query.from, query.to),
+      ...(statusFilter ? [{ status: statusFilter }] : []),
+    ],
   };
 
-  const [total, rows] = await Promise.all([
-    prisma.storeOrder.count({ where }),
-    prisma.storeOrder.findMany({
-      where,
-      skip,
-      take: query.limit,
-      orderBy: { requestedAt: 'desc' },
-      include: {
-        carehome: { select: { id: true, name: true } },
-        resident: { select: { id: true, name: true, residentNumber: true } },
-      },
-    }),
-  ]);
+  const total = await prisma.storeOrder.count({ where });
+  const totalPages = Math.max(1, Math.ceil(total / query.limit));
+  const page = Math.min(query.page, totalPages);
+
+  const rows = await prisma.storeOrder.findMany({
+    where,
+    skip: (page - 1) * query.limit,
+    take: query.limit,
+    orderBy: [{ requestedAt: 'desc' }, { id: 'desc' }],
+    include: {
+      carehome: { select: { id: true, name: true } },
+      resident: residentWithFamily,
+      lineItems: { select: { quantity: true } },
+    },
+  });
 
   return {
     total,
-    page: query.page,
+    page,
     limit: query.limit,
-    data: rows.map(serializeOrderSummary),
+    totalPages,
+    data: rows.map((order) => ({
+      id: order.id,
+      orderId: order.referenceId,
+      carehome: order.carehome,
+      familyContact: familyContactPhone(order.resident.guardians),
+      itemCount: order.lineItems.reduce((sum, line) => sum + line.quantity, 0),
+      date: order.requestedAt,
+      ...statusFields(order.status),
+    })),
   };
 }
 
@@ -132,7 +193,7 @@ export async function getStoreOrder(id: string) {
     where: { id },
     include: {
       carehome: { select: { id: true, name: true, addressLine: true, city: true, postcode: true } },
-      resident: { select: { id: true, name: true, residentNumber: true } },
+      resident: residentWithFamily,
       lineItems: true,
     },
   });
@@ -141,24 +202,28 @@ export async function getStoreOrder(id: string) {
     throw new AppError(404, 'Order not found', 'NOT_FOUND');
   }
 
+  const itemCount = order.lineItems.reduce((sum, line) => sum + line.quantity, 0);
+
   return {
     id: order.id,
-    referenceId: order.referenceId,
-    status: order.status,
-    requestedAt: order.requestedAt,
+    orderId: order.referenceId,
+    ...statusFields(order.status),
+    requestDate: order.requestedAt,
+    familyContact: familyContactPhone(order.resident.guardians),
     carehome: order.carehome,
-    resident: order.resident,
+    resident: { id: order.resident.id, name: order.resident.name, residentNumber: order.resident.residentNumber },
     deliveryAddress: {
       addressLine: order.deliveryAddressLine,
       city: order.deliveryCity,
       postcode: order.deliveryPostcode,
     },
+    itemCount,
     items: order.lineItems.map(serializeLineItem),
-    itemsSubtotal: order.itemsSubtotal.toString(),
+    itemsPrice: order.itemsSubtotal.toString(),
     deliveryFee: order.deliveryFee.toString(),
-    vatRate: order.vatRate.toString(),
+    vatPercent: (Number(order.vatRate) * 100).toString(),
     vatAmount: order.vatAmount.toString(),
-    total: order.total.toString(),
+    totalPrice: order.total.toString(),
   };
 }
 

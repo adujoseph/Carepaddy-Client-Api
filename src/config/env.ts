@@ -61,6 +61,8 @@ export const env = {
   refreshTokenTtlDays: 30,
   /** Admin idle timeout — session invalid after this many seconds without activity. */
   adminSessionIdleSeconds: Number(optional('ADMIN_SESSION_IDLE_SECONDS', String(30 * 60))),
+  /** When true, SUPER_ADMIN must enroll MFA before using any protected admin route. */
+  adminRequireSuperAdminMfa: optional('ADMIN_REQUIRE_SUPER_ADMIN_MFA', 'false') === 'true',
   /** Cloudflare Turnstile secret; when set, admin login CAPTCHA tokens are verified. */
   turnstileSecretKey: readEnv('TURNSTILE_SECRET_KEY'),
   appPublicUrl: optional('APP_PUBLIC_URL', 'http://localhost:3000'),
@@ -84,6 +86,8 @@ export const env = {
   awsAccessKeyId: readEnv('AWS_ACCESS_KEY_ID'),
   awsSecretAccessKey: readEnv('AWS_SECRET_ACCESS_KEY'),
   sesFromEmail: optional('SES_FROM_EMAIL', 'no-reply@carepaddy.com'),
+  /** Shown to care homes as the contact address in account status emails. */
+  supportEmail: optional('SUPPORT_EMAIL', 'support@carepaddy.co.uk'),
   snsSenderId: optional('SNS_SENDER_ID', 'CarePaddy'),
 
   /** Public base URL for locally stored profile images (e.g. https://api.example.com). */

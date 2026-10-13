@@ -25,15 +25,18 @@ function sanitizeState(state: unknown): unknown {
   return out;
 }
 
-export async function writeAdminAuditLog(options: {
-  actorId: string | null;
-  action: string;
-  targetType: string;
-  targetId?: string | null;
-  beforeState?: unknown;
-  afterState?: unknown;
-}) {
-  await prisma.adminAuditLog.create({
+export async function writeAdminAuditLog(
+  options: {
+    actorId: string | null;
+    action: string;
+    targetType: string;
+    targetId?: string | null;
+    beforeState?: unknown;
+    afterState?: unknown;
+  },
+  tx: Pick<typeof prisma, 'adminAuditLog'> = prisma,
+) {
+  await tx.adminAuditLog.create({
     data: {
       actorId: options.actorId,
       action: options.action,

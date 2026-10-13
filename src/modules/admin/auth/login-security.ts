@@ -1,3 +1,4 @@
+import { env } from '@config/env';
 import { verifyCaptchaToken } from '@lib/captcha';
 import { prisma } from '@lib/prisma';
 import { AppError } from '@middleware/error-handler';
@@ -38,7 +39,7 @@ export async function requireCaptchaIfNeeded(
   captchaToken: string | undefined,
   remoteIp?: string,
 ) {
-  if (recentFailures < CAPTCHA_AFTER) return;
+  if (!env.turnstileSecretKey || recentFailures < CAPTCHA_AFTER) return;
   const ok = await verifyCaptchaToken(captchaToken, remoteIp);
   if (!ok) {
     throw new AppError(400, 'CAPTCHA verification required', 'CAPTCHA_REQUIRED');

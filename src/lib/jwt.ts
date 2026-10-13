@@ -170,6 +170,7 @@ export type StaffInviteTokenPayload = {
 
 export async function signStaffInviteToken(
   payload: Omit<StaffInviteTokenPayload, 'purpose'>,
+  expiresIn = '72h',
 ): Promise<string> {
   return new jose.SignJWT({
     purpose: 'staff_invite',
@@ -182,7 +183,7 @@ export async function signStaffInviteToken(
     .setSubject(payload.userId)
     .setJti(payload.jti)
     .setIssuedAt()
-    .setExpirationTime('72h')
+    .setExpirationTime(expiresIn)
     .sign(secretKey(env.jwtInviteSecret));
 }
 

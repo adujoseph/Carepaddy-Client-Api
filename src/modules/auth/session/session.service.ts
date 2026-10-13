@@ -5,6 +5,8 @@ import { verifyPasswordConstantTime } from '@lib/password';
 import { isEmailLike, normalizeEmail, normalizePhone } from '@lib/normalize';
 import { AppError } from '@middleware/error-handler';
 import { env } from '@config/env';
+import { touchCarehomeActivity } from '@lib/carehome-status';
+import { CAREHOME_DEACTIVATED_MESSAGE } from '@middleware/auth';
 import type { LoginInput } from './session.schema.js';
 
 const GENERIC_LOGIN_ERROR = 'Invalid login details or account unavailable';
@@ -100,7 +102,12 @@ export async function login(
     throw new AppError(401, GENERIC_LOGIN_ERROR, 'INVALID_CREDENTIALS');
   }
 
+  if (user.carehome && (user.carehome.status === 'suspended' || user.carehome.status === 'rejected')) {
+    throw new AppError(403, CAREHOME_DEACTIVATED_MESSAGE, 'CARE_HOME_DEACTIVATED');
+  }
+
   await prisma.failedLoginAttempt.deleteMany({ where: { userId: user.id } });
+  void touchCarehomeActivity(user.tenantId);
 
   const tokens = await createSessionForUser({
     userId: user.id,
@@ -157,7 +164,7 @@ export async function refresh(refreshToken: string) {
   const tokenHash = hashToken(refreshToken);
   const session = await prisma.session.findFirst({
     where: { refreshTokenHash: tokenHash },
-    include: { user: true },
+    include: { user: { include: { carehome: { select: { status: true } } } } },
   });
 
   if (!session) {
@@ -170,9 +177,12 @@ export async function refresh(refreshToken: string) {
     throw new AppError(401, 'Invalid or expired refresh token', 'UNAUTHORIZED');
   }
 
+  const carehomeStatus = session.user.carehome?.status;
   const refreshAllowed =
-    session.user.status === 'active' ||
-    (session.user.userRole === 'guardian' && session.user.status === 'pending');
+    (session.user.status === 'active' ||
+      (session.user.userRole === 'guardian' && session.user.status === 'pending')) &&
+    carehomeStatus !== 'suspended' &&
+    carehomeStatus !== 'rejected';
 
   if (!refreshAllowed) {
     await prisma.session.update({

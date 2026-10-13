@@ -105,7 +105,14 @@ export function requireAdminPermission(...required: AdminPermission[]) {
         targetType: 'AdminPermission',
         afterState: { required, path: req.path, method: req.method },
       });
-      next(new AppError(403, 'You do not have permission to perform this action', 'FORBIDDEN'));
+      next(
+        new AppError(
+          403,
+          'You do not have permission to perform this action',
+          'INSUFFICIENT_PERMISSION',
+          { required },
+        ),
+      );
       return;
     }
     next();

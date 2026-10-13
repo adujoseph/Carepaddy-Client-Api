@@ -38,18 +38,38 @@ model Carehome {
   cqcCheckedAt    DateTime?
   email           String        @unique
   phone           String?       @unique
-  addressLine     String
-  city            String
-  postcode        String
+  /// Null for care homes created by a platform admin until the care admin completes their profile.
+  addressLine     String?
+  city            String?
+  postcode        String?
   isEmailVerified Boolean       @default(false)
   isPhoneVerified Boolean       @default(false)
+  /// pending = invited (not yet activated), active, suspended = deactivated by a platform admin.
   status          AccountStatus @default(active)
+  activatedAt     DateTime?
+  /// Drives derived Inactive (no activity for 180 days). Updated only via touchCarehomeActivity.
+  lastActivityAt  DateTime?
+  manuallyInactive       Boolean   @default(false)
+  manuallyInactiveAt     DateTime?
+  manuallyInactiveById   String?
+  manuallyInactiveReason String?
+  deactivatedAt      DateTime?
+  deactivatedById    String?
+  deactivationReason String?
+  deactivationNote   String?
+  invitedById        String?
+  inviteSendFailedAt DateTime?
+  /// Optimistic locking for admin edits.
+  version         Int           @default(0)
   users           User[]
   residents       Resident[]
   guardianLinks   GuardianResident[]
   guardianRequests GuardianRegistrationRequest[]
   storeOrders     StoreOrder[]
   createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @default(now()) @updatedAt
+
+  @@index([status, createdAt])
 }
 
 model User {
@@ -378,6 +398,7 @@ model StoreOrder {
   updatedAt           DateTime                  @updatedAt
 
   @@index([carehomeId, status])
+  @@index([residentId, status])
   @@index([status, requestedAt])
   @@index([referenceId])
 }

@@ -77,7 +77,7 @@ export async function registerCarehome(input: RegisterCarehomeInput) {
     {
       cqcNumber,
       name: result.carehome.name,
-      postcode: result.carehome.postcode,
+      postcode: result.carehome.postcode ?? '',
     },
     async (cqcResult) => {
       await prisma.carehome.update({

@@ -1,5 +1,7 @@
 import { prisma } from '@lib/prisma';
 import { AppError } from '@middleware/error-handler';
+import { CAREHOME_DEACTIVATED_MESSAGE } from '@middleware/auth';
+import { touchCarehomeActivity } from '@lib/carehome-status';
 import {
   assertCarehomeStaffCanAccessOrder,
   assertCarehomeStaffTenant,
@@ -114,6 +116,13 @@ export async function createStoreOrder(
   const referenceId = generateStoreOrderReferenceId();
 
   const order = await prisma.$transaction(async (tx) => {
+    // Shares the row lock taken by admin deactivation so an order cannot slip in mid-deactivation.
+    const [home] = await tx.$queryRaw<{ status: string }[]>`
+      SELECT "status"::text AS status FROM "Carehome" WHERE "id" = ${carehomeId} FOR SHARE`;
+    if (!home || home.status === 'suspended' || home.status === 'rejected') {
+      throw new AppError(403, CAREHOME_DEACTIVATED_MESSAGE, 'CARE_HOME_DEACTIVATED');
+    }
+
     const created = await tx.storeOrder.create({
       data: {
         referenceId,
@@ -157,6 +166,7 @@ export async function createStoreOrder(
     return created;
   });
 
+  void touchCarehomeActivity(carehomeId);
   return presentOrderDetail(order);
 }
 

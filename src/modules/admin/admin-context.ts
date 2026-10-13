@@ -1,3 +1,4 @@
+import { env } from '@config/env';
 import { prisma } from '@lib/prisma';
 import {
   ADMIN_PERMISSIONS,
@@ -69,5 +70,6 @@ export function serializeAdminMe(ctx: AdminContext) {
 }
 
 export function superAdminRequiresMfa(ctx: AdminContext): boolean {
+  if (!env.adminRequireSuperAdminMfa) return false;
   return ctx.role.name.toUpperCase() === SUPER_ADMIN_ROLE_NAME && !ctx.mfaEnrolled;
 }

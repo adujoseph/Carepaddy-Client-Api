@@ -7,6 +7,7 @@ export class AppError extends Error {
     public statusCode: number,
     message: string,
     public code: string = 'ERROR',
+    public details?: Record<string, unknown>,
   ) {
     super(message);
     this.name = 'AppError';
@@ -59,7 +60,11 @@ export function errorHandler(
 
   if (err instanceof AppError) {
     res.status(err.statusCode).json({
-      error: { code: err.code, message: err.message },
+      error: {
+        code: err.code,
+        message: err.message,
+        ...(err.details ? { details: err.details } : {}),
+      },
     });
     return;
   }
