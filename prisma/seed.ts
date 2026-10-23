@@ -50,17 +50,30 @@ async function main() {
     }
   }
 
+  const passwordHash = await hashPassword(password);
   const existing = await prisma.adminUser.findUnique({ where: { emailLower: email } });
   if (existing) {
-    console.log('Admin seed user already exists');
+    await prisma.adminSession.updateMany({
+      where: { adminUserId: existing.id, revoked: false },
+      data: { revoked: true },
+    });
+    await prisma.adminUser.update({
+      where: { id: existing.id },
+      data: {
+        password: passwordHash,
+        status: 'ACTIVE',
+        mustChangePassword: true,
+        roleId: role.id,
+      },
+    });
+    console.log(`Updated super admin: ${email} (password reset, sessions revoked)`);
   } else {
-
     await prisma.adminUser.create({
       data: {
         email,
         emailLower: email,
         name: 'Super Admin',
-        password: await hashPassword(password),
+        password: passwordHash,
         status: 'ACTIVE',
         mustChangePassword: true,
         roleId: role.id,
