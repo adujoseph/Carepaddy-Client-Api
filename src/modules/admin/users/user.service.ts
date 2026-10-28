@@ -58,7 +58,7 @@ async function issueInvite(adminUserId: string, email: string) {
   });
 
   const token = await signAdminInviteToken({ jti, adminUserId, email });
-  const link = `${env.appPublicUrl}/admin/accept-invite?token=${encodeURIComponent(token)}`;
+  const link = `${env.adminPublicUrl}/admin/accept-invite?token=${encodeURIComponent(token)}`;
 
   try {
     await emailSender.send({

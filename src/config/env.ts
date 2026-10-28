@@ -35,6 +35,11 @@ function optional(key: string, fallback: string): string {
   return readEnv(key) ?? fallback;
 }
 
+/** Public frontend origin. Trailing slashes are stripped so email links never get `//path`. */
+function publicOrigin(key: string, fallback: string): string {
+  return optional(key, fallback).replace(/\/+$/, '');
+}
+
 function parsePort(value: string | undefined, fallback: number): number {
   const port = Number(value ?? fallback);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -45,6 +50,10 @@ function parsePort(value: string | undefined, fallback: number): number {
 
 const jwtAccessSecret = required('JWT_ACCESS_SECRET');
 const port = parsePort(readEnv('PORT'), 4000);
+const clientPublicUrl = publicOrigin(
+  'CLIENT_PUBLIC_URL',
+  readEnv('APP_PUBLIC_URL') ?? 'http://localhost:3000',
+);
 
 export const env = {
   nodeEnv: readEnv('NODE_ENV') ?? 'development',
@@ -65,7 +74,15 @@ export const env = {
   adminRequireSuperAdminMfa: optional('ADMIN_REQUIRE_SUPER_ADMIN_MFA', 'false') === 'true',
   /** Cloudflare Turnstile secret; when set, admin login CAPTCHA tokens are verified. */
   turnstileSecretKey: readEnv('TURNSTILE_SECRET_KEY'),
-  appPublicUrl: optional('APP_PUBLIC_URL', 'http://localhost:3000'),
+  /**
+   * Customer / care-home / guardian app origin (email links under `/api/v1/client`).
+   * `CLIENT_PUBLIC_URL` wins; `APP_PUBLIC_URL` is the legacy fallback.
+   */
+  clientPublicUrl,
+  /** Platform admin app origin (email links under `/api/v1/admin`). */
+  adminPublicUrl: publicOrigin('ADMIN_PUBLIC_URL', 'http://localhost:3001'),
+  /** @deprecated Use `clientPublicUrl`. Kept so older call sites keep compiling. */
+  appPublicUrl: clientPublicUrl,
 
   redisUrl: optional('REDIS_URL', 'redis://127.0.0.1:6379'),
   /**

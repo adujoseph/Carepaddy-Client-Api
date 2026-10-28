@@ -118,7 +118,7 @@ export async function adminForgotPassword(input: AdminForgotPasswordInput) {
       data: { jti, adminUserId: admin.id, expiresAt },
     });
     const token = await signAdminPasswordResetToken({ jti, adminUserId: admin.id });
-    const link = `${env.appPublicUrl}/admin/reset-password?token=${encodeURIComponent(token)}`;
+    const link = `${env.adminPublicUrl}/admin/reset-password?token=${encodeURIComponent(token)}`;
     try {
       await emailSender.send({
         to: email,

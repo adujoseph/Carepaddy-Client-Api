@@ -144,7 +144,7 @@ export async function inviteAdmin(input: InviteAdminInput, auth: CareAdminAuth) 
     email,
   });
 
-  const link = `${env.appPublicUrl}/accept-admin-invite?token=${encodeURIComponent(token)}`;
+  const link = `${env.clientPublicUrl}/accept-admin-invite?token=${encodeURIComponent(token)}`;
 
   try {
     await emailSender.send({

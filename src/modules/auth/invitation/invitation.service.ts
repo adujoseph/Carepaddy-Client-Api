@@ -132,7 +132,7 @@ export async function createInvitation(
     phone: invite.phone,
   });
 
-  const link = `${env.appPublicUrl}/complete-invitation?token=${encodeURIComponent(token)}`;
+  const link = `${env.clientPublicUrl}/complete-invitation?token=${encodeURIComponent(token)}`;
   const message = `You've been invited as a guardian for ${resident.name} at ${resident.carehome.name}. Complete registration: ${link}`;
 
   try {

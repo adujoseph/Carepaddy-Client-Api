@@ -18,7 +18,7 @@ export async function sendCarehomeInviteEmail(options: {
   token: string;
   expiresAt: Date;
 }): Promise<boolean> {
-  const link = `${env.appPublicUrl}/accept-admin-invite?token=${encodeURIComponent(options.token)}`;
+  const link = `${env.clientPublicUrl}/accept-admin-invite?token=${encodeURIComponent(options.token)}`;
   try {
     await emailSender.send({
       to: options.to,

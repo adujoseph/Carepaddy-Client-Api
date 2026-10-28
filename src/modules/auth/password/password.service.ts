@@ -56,7 +56,7 @@ export async function initiatePasswordReset(input: ResetPasswordInput): Promise<
   });
 
   const token = await signPasswordResetToken({ jti, userId: user.id });
-  const resetLink = `${env.appPublicUrl}/reset-password?token=${encodeURIComponent(token)}`;
+  const resetLink = `${env.clientPublicUrl}/reset-password?token=${encodeURIComponent(token)}`;
 
   try {
     await emailSender.send({
